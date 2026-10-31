@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_QUANTITY, total, summary, validateOrder, validateOrders, markOrdersPaid, toCSV } from './sales.js';
+import { MAX_QUANTITY, MAX_QR_LENGTH, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, toCSV } from './sales.js';
 
 const order = overrides => ({
   id: 'test-order', name: 'Test Customer', address: '12 Example St', phone: '555-0100',
@@ -50,4 +50,14 @@ test('CSV preserves sheet fields, quotes, newlines, and protects formulas', () =
   for (const name of ['+command', '-command', '@command', ' \t=command']) {
     assert.ok(toCSV([order({ name })]).includes(`"'${name}"`));
   }
+});
+test('Venmo QR storage accepts only bounded embedded PNG images', () => {
+  const prefix = 'data:image/png;base64,iVBORw0KGgo';
+  assert.equal(validateVenmoQR(`${prefix}AAAA==`), `${prefix}AAAA==`);
+  assert.equal(validateVenmoQR(prefix + 'A'.repeat(MAX_QR_LENGTH - prefix.length)).length, MAX_QR_LENGTH);
+  for (const invalid of [
+    null, 123, 'https://example.com/qr.png', 'javascript:alert(1)',
+    'data:image/svg+xml;base64,AAAA', 'data:image/png;base64,not-a-png',
+    `${prefix}<script>`, prefix + 'A'.repeat(MAX_QR_LENGTH - prefix.length + 1),
+  ]) assert.throws(() => validateVenmoQR(invalid));
 });

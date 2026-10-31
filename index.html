@@ -35,17 +35,30 @@
       <p id="no-results" class="empty" hidden>No matching orders. Try another search or filter.</p>
     </section>
     <aside class="reminder"><span aria-hidden="true">✧</span><div><strong>A small reminder for a big difference</strong><p>Checks payable to <b>Holliston Pack 47</b>. Remember to note where to leave each delivery.</p></div></aside>
-    <footer><span id="connection" role="status">Checking offline availability...</span><div><button id="backup">Back up orders</button><span>·</span><button id="restore">Restore backup</button></div><p>Saved only on this device. Back up regularly; clearing browser data removes your orders.</p></footer>
+    <footer><span id="connection" role="status">Checking offline availability...</span><div><button id="manage-venmo">Venmo QR setup</button><span>·</span><button id="backup">Back up orders</button><span>·</span><button id="restore">Restore backup</button></div><p>Saved only on this device. Back up regularly; clearing browser data removes your orders and Venmo QR screenshot.</p></footer>
   </main>
   <dialog id="order-dialog" aria-labelledby="dialog-title">
     <form id="order-form">
       <div class="dialog-heading"><div><p class="eyebrow">One doorstep at a time</p><h2 id="dialog-title">New order</h2></div><button type="button" class="close" id="close-dialog" aria-label="Close order form">×</button></div>
       <fieldset><legend>Customer details</legend><label>Name <span>*</span><input name="name" autocomplete="name" required maxlength="200" placeholder="Customer's full name"></label><label>Address <span>*</span><input name="address" autocomplete="street-address" required maxlength="500" placeholder="Street address"></label><label>Phone<input name="phone" type="tel" autocomplete="tel" maxlength="100" placeholder="For delivery updates"></label></fieldset>
       <fieldset><legend>The holiday goods</legend><div class="products"><label class="product"><span>✳ <b>Wreaths</b><small>$20 each</small></span><select name="wreaths" aria-label="Wreath quantity" required><option value="0" selected>0</option></select></label><label class="product"><span>♧ <b>Candles</b><small>$13 each</small></span><select name="candles" aria-label="Candle quantity" required><option value="0" selected>0</option></select></label></div><div class="order-total"><span>Order total</span><strong id="form-total">$0</strong></div></fieldset>
-      <fieldset><legend>Payment & delivery</legend><label>Payment method<select name="payment"><option value="cash">Cash</option><option value="check">Check</option><option value="venmo">Venmo</option></select></label><label>Delivery location<input name="location" maxlength="500" placeholder="e.g. Front steps or side door"></label><label class="checkbox"><input name="delivered" type="checkbox">Order delivered</label><label>Notes<textarea name="notes" rows="2" maxlength="2000" placeholder="Anything to remember?"></textarea></label></fieldset>
+      <fieldset><legend>Payment & delivery</legend><label>Payment method<select name="payment"><option value="cash">Cash</option><option value="check">Check</option><option value="venmo">Venmo</option></select></label><button type="button" id="order-venmo" class="button quiet" hidden>Show Venmo QR</button><label>Delivery location<input name="location" maxlength="500" placeholder="e.g. Front steps or side door"></label><label class="checkbox"><input name="delivered" type="checkbox">Order delivered</label><label>Notes<textarea name="notes" rows="2" maxlength="2000" placeholder="Anything to remember?"></textarea></label></fieldset>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <div class="form-actions"><button type="button" id="delete-order" class="button danger" hidden>Delete order</button><button type="button" id="cancel-dialog" class="button quiet">Cancel</button><button type="submit" class="button green">Save order</button></div>
     </form>
+  </dialog>
+  <dialog id="venmo-dialog" aria-labelledby="venmo-title">
+    <div class="install-content">
+      <div class="dialog-heading"><h2 id="venmo-title">Pay with Venmo</h2><button type="button" class="close" id="close-venmo" aria-label="Close Venmo QR">×</button></div>
+      <p id="venmo-context"></p>
+      <p id="venmo-empty">Upload the fundraiser's Venmo QR screenshot once, then pull it up from any Venmo order.</p>
+      <img id="venmo-image" class="venmo-image" alt="Shared fundraiser Venmo QR code" hidden>
+      <p>Have the customer scan this code with their phone and enter the order total. Check the recipient account before accepting payment.</p>
+      <label class="button quiet venmo-upload"><span id="venmo-upload-label">Upload QR screenshot</span><input id="venmo-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <p id="venmo-upload-status" role="status"></p>
+      <p id="venmo-error" class="form-error" role="alert" hidden></p>
+      <p class="venmo-privacy">The screenshot stays on this device and works offline. Keep the original image; order backups do not include it.</p>
+    </div>
   </dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title">
     <form id="delete-form" class="install-content">

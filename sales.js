@@ -1,8 +1,18 @@
 export const PRICES = Object.freeze({ wreaths: 20, candles: 13 });
 export const MAX_QUANTITY = 999;
 export const STORAGE_KEY = 'pack47-orders-v1';
+export const VENMO_QR_KEY = 'pack47-venmo-qr-v1';
+export const MAX_QR_LENGTH = 2 * 1024 * 1024;
 export const money = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 export const total = order => order.wreaths * PRICES.wreaths + order.candles * PRICES.candles;
+
+export function validateVenmoQR(image) {
+  if (typeof image !== 'string' || image.length > MAX_QR_LENGTH ||
+      !/^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/.test(image)) {
+    throw new Error('Use a valid QR screenshot. If it is too large, crop it to the QR code and try again.');
+  }
+  return image;
+}
 
 export function validateOrder(order) {
   if (!order || typeof order !== 'object') throw new Error('Invalid order.');

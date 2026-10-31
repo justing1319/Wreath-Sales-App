@@ -25,6 +25,9 @@ An HTTP LAN address is only useful for viewing the interface: mobile browsers re
 - New orders start undelivered. Edit orders to change the payment method or record delivery.
 - To delete, edit the order and choose **Delete order**. A separate confirmation asks you to type the customer's full name exactly (including capitalization) before **Delete permanently** unlocks. **Keep order**, closing the dialog, or Escape cancels without deleting.
 - Search by name, address, or phone. Filter undelivered orders.
+- Choose **Venmo QR setup** in the footer to upload one shared fundraiser QR screenshot (PNG, JPEG, or WebP, up to 10 MB). It is resized to at most 1600 pixels and saved locally as PNG; overly large processed images or storage failures are reported without replacing the previous screenshot.
+- **Show Venmo QR** appears on Venmo order cards and in the entry form when Venmo is selected. It opens the shared image and that order's name/total, including before saving. Have the customer scan it on their own phone and enter the amount. The app does not decode the QR, generate a Venmo payment URL, or verify payment; check the code and recipient yourself.
+- The QR image works offline after upload and stays on this device. Keep its original screenshot to upload again on another device; order backups contain orders only, not the shared QR setting.
 - **Export CSV** exports all orders, regardless of active filters, for Excel or other spreadsheets.
 - **Back up orders** downloads a JSON file. **Restore backup** validates the file and asks before replacing current orders. CSV is for spreadsheet use, not restoration.
 
