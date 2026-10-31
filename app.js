@@ -1,11 +1,20 @@
-import { STORAGE_KEY, money, total, summary, validateOrder, validateOrders, toCSV } from './sales.js';
+import { STORAGE_KEY, MAX_QUANTITY, money, total, summary, validateOrder, validateOrders, markOrdersPaid, toCSV } from './sales.js';
 
 const $ = selector => document.querySelector(selector);
 const form = $('#order-form');
 const dialog = $('#order-dialog');
+const deleteDialog = $('#delete-dialog');
+for (const field of ['wreaths', 'candles']) {
+  const options = document.createDocumentFragment();
+  for (let quantity = 1; quantity <= MAX_QUANTITY; quantity++) {
+    options.append(new Option(String(quantity), String(quantity)));
+  }
+  form.elements[field].append(options);
+}
 let orders = [];
 let storageAvailable = true;
 let editingId = null;
+let deletingId = null;
 let filter = 'all';
 let installPrompt = null;
 let toastTimer;
@@ -25,6 +34,11 @@ function toast(message) {
 try {
   const saved = localStorage.getItem(STORAGE_KEY);
   orders = saved === null ? [] : validateOrders(JSON.parse(saved));
+  if (orders.some(order => !order.paid)) {
+    const paidOrders = markOrdersPaid(orders);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(paidOrders));
+    orders = paidOrders;
+  }
   localStorage.setItem('pack47-storage-check', '1');
   localStorage.removeItem('pack47-storage-check');
 } catch (error) {
@@ -33,9 +47,9 @@ try {
 }
 
 function persist(nextOrders) {
-  validateOrders(nextOrders);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextOrders));
-  orders = nextOrders;
+  const paidOrders = markOrdersPaid(nextOrders);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(paidOrders));
+  orders = paidOrders;
   storageAvailable = true;
   $('#notice').hidden = true;
   render();
@@ -61,7 +75,7 @@ function render() {
   $('#export').disabled = $('#backup').disabled = !storageAvailable || !orders.length;
   const query = $('#search').value.trim().toLowerCase();
   const visible = orders.filter(order => [order.name, order.address, order.phone].some(value => value.toLowerCase().includes(query)))
-    .filter(order => filter === 'all' || (filter === 'unpaid' ? !order.paid : !order.delivered))
+    .filter(order => filter === 'all' || !order.delivered)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   $('#orders').replaceChildren();
   $('#empty').hidden = orders.length > 0 || !storageAvailable;
@@ -80,7 +94,7 @@ function render() {
     items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`), element('strong', '', money(total(order))));
     const status = element('div', 'status');
     const paymentName = order.payment === 'venmo' ? 'Venmo' : order.payment === 'cash' ? 'Cash' : 'Check';
-    status.append(element('span', `badge ${order.paid ? '' : 'waiting'}`, `${order.paid ? 'Paid' : 'Unpaid'} · ${paymentName}`),
+    status.append(element('span', 'badge', paymentName),
       element('span', `badge ${order.delivered ? '' : 'waiting'}`, order.delivered ? 'Delivered' : 'To deliver'));
     const edit = element('button', 'button quiet edit-order', 'Edit');
     edit.setAttribute('aria-label', `Edit order for ${order.name}`);
@@ -106,7 +120,6 @@ function openOrder(order = null) {
   $('#form-error').hidden = true;
   if (order) {
     for (const key of ['name', 'address', 'phone', 'wreaths', 'candles', 'payment', 'location', 'notes']) form.elements[key].value = order[key];
-    form.elements.paid.checked = order.paid;
     form.elements.delivered.checked = order.delivered;
   }
   updateTotal();
@@ -118,8 +131,8 @@ $('#add-order').addEventListener('click', () => openOrder());
 $('#first-order').addEventListener('click', () => openOrder());
 $('#close-dialog').addEventListener('click', () => dialog.close());
 $('#cancel-dialog').addEventListener('click', () => dialog.close());
-form.elements.wreaths.addEventListener('input', updateTotal);
-form.elements.candles.addEventListener('input', updateTotal);
+form.elements.wreaths.addEventListener('change', updateTotal);
+form.elements.candles.addEventListener('change', updateTotal);
 form.addEventListener('submit', event => {
   event.preventDefault();
   try {
@@ -133,7 +146,7 @@ form.addEventListener('submit', event => {
       wreaths: Number(form.elements.wreaths.value),
       candles: Number(form.elements.candles.value),
       payment: form.elements.payment.value,
-      paid: form.elements.paid.checked,
+      paid: true,
       delivered: form.elements.delivered.checked,
       location: form.elements.location.value.trim(),
       notes: form.elements.notes.value.trim(),
@@ -149,14 +162,46 @@ form.addEventListener('submit', event => {
 });
 
 $('#delete-order').addEventListener('click', () => {
-  if (!confirm('Delete this order? This cannot be undone.')) return;
+  const order = orders.find(order => order.id === editingId);
+  if (!order) {
+    $('#form-error').textContent = 'Order not found. Reload before trying again.';
+    $('#form-error').hidden = false;
+    return;
+  }
+  deletingId = order.id;
+  $('#delete-form').reset();
+  $('#delete-name').textContent = order.name;
+  $('#delete-error').hidden = true;
+  $('#confirm-delete').disabled = true;
+  deleteDialog.showModal();
+  $('#delete-confirmation').focus();
+});
+
+$('#delete-confirmation').addEventListener('input', () => {
+  const order = orders.find(order => order.id === deletingId);
+  $('#confirm-delete').disabled = !order || $('#delete-confirmation').value !== order.name;
+});
+$('#cancel-delete').addEventListener('click', () => deleteDialog.close());
+$('#close-delete').addEventListener('click', () => deleteDialog.close());
+deleteDialog.addEventListener('close', () => {
+  deletingId = null;
+  $('#delete-form').reset();
+  $('#confirm-delete').disabled = true;
+});
+$('#delete-form').addEventListener('submit', event => {
+  event.preventDefault();
   try {
-    persist(orders.filter(order => order.id !== editingId));
+    const order = orders.find(order => order.id === deletingId);
+    if (!order || $('#delete-confirmation').value !== order.name) {
+      throw new Error("Type the customer's full name exactly as shown.");
+    }
+    persist(orders.filter(order => order.id !== deletingId));
+    deleteDialog.close();
     dialog.close();
     toast('Order deleted');
   } catch (error) {
-    $('#form-error').textContent = `Order not deleted: ${error.message}`;
-    $('#form-error').hidden = false;
+    $('#delete-error').textContent = `Order not deleted: ${error.message}`;
+    $('#delete-error').hidden = false;
   }
 });
 
@@ -198,7 +243,7 @@ $('#backup-file').addEventListener('change', async event => {
     const backup = JSON.parse(await file.text());
     if (backup.app !== 'pack47-evergreen' || backup.version !== 1) throw new Error('Choose an Evergreen backup file.');
     validateOrders(backup.orders);
-    if (!confirm(`Replace orders on this device with ${backup.orders.length} orders from this backup? Back up current orders first.`)) return;
+    if (!confirm(`Replace orders on this device with ${backup.orders.length} orders from this backup? All restored orders will be marked paid. Back up current orders first.`)) return;
     persist(backup.orders);
     toast('Backup restored');
   } catch (error) {
@@ -212,6 +257,7 @@ window.addEventListener('storage', event => {
   if (event.key !== STORAGE_KEY && event.key !== null) return;
   // A second open tab must not silently overwrite an in-progress edit.
   storageAvailable = false;
+  if (deleteDialog.open) deleteDialog.close();
   if (dialog.open) dialog.close();
   notice('Orders changed in another tab or browser storage was cleared. Reload before making more changes.');
   render();

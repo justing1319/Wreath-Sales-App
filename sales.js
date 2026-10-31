@@ -1,4 +1,5 @@
 export const PRICES = Object.freeze({ wreaths: 20, candles: 13 });
+export const MAX_QUANTITY = 999;
 export const STORAGE_KEY = 'pack47-orders-v1';
 export const money = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
 export const total = order => order.wreaths * PRICES.wreaths + order.candles * PRICES.candles;
@@ -12,8 +13,8 @@ export function validateOrder(order) {
     throw new Error('Each order needs a name, address, and valid creation date.');
   }
   for (const field of ['wreaths', 'candles']) {
-    if (!Number.isInteger(order[field]) || order[field] < 0 || order[field] > 999) {
-      throw new Error('Quantities must be whole numbers between 0 and 999.');
+    if (!Number.isInteger(order[field]) || order[field] < 0 || order[field] > MAX_QUANTITY) {
+      throw new Error(`Quantities must be whole numbers between 0 and ${MAX_QUANTITY}.`);
     }
   }
   if (order.wreaths + order.candles === 0) throw new Error('Add at least one wreath or candle.');
@@ -31,6 +32,10 @@ export function validateOrders(orders) {
     ids.add(order.id);
   }
   return orders;
+}
+
+export function markOrdersPaid(orders) {
+  return validateOrders(orders).map(order => ({ ...order, paid: true }));
 }
 
 export function summary(orders) {

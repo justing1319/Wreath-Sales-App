@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { total, summary, validateOrder, validateOrders, toCSV } from './sales.js';
+import { MAX_QUANTITY, total, summary, validateOrder, validateOrders, markOrdersPaid, toCSV } from './sales.js';
 
 const order = overrides => ({
   id: 'test-order', name: 'Test Customer', address: '12 Example St', phone: '555-0100',
@@ -28,6 +28,18 @@ test('validates every persisted order and backup', () => {
   assert.throws(() => validateOrders({}));
   assert.throws(() => validateOrders([order(), order()]));
   assert.throws(() => validateOrders([null]));
+  assert.equal(validateOrder(order({ wreaths: MAX_QUANTITY, candles: MAX_QUANTITY })).wreaths, 999);
+  assert.throws(() => validateOrder(order({ candles: MAX_QUANTITY + 1 })));
+});
+test('marks existing and restored orders paid without changing other data', () => {
+  const original = [order(), order({ id: 'second', payment: 'venmo', paid: true, delivered: true })];
+  const paid = markOrdersPaid(original);
+  assert.deepEqual(paid, original.map(item => ({ ...item, paid: true })));
+  assert.equal(original[0].paid, false);
+  assert.deepEqual(markOrdersPaid(paid), paid);
+  assert.deepEqual(summary(paid), { sales: 92, collected: 92, wreaths: 2, candles: 4, pending: 1 });
+  assert.ok(toCSV(paid).includes('"46","Yes","","","Yes","No"'));
+  assert.throws(() => markOrdersPaid([order({ paid: 'yes' })]));
 });
 test('CSV preserves sheet fields, quotes, newlines, and protects formulas', () => {
   const csv = toCSV([order({ name: '=SUM(1,2)', notes: 'A "quote"\nand comma,', payment: 'venmo', paid: true })]);
