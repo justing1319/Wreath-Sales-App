@@ -1,14 +1,26 @@
-import { STORAGE_KEY, money, total, summary, validateOrder, validateOrders, toCSV } from './sales.js';
+import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, toCSV } from './sales.js';
 
 const $ = selector => document.querySelector(selector);
 const form = $('#order-form');
 const dialog = $('#order-dialog');
+const deleteDialog = $('#delete-dialog');
+const venmoDialog = $('#venmo-dialog');
+for (const field of ['wreaths', 'candles']) {
+  const options = document.createDocumentFragment();
+  for (let quantity = 1; quantity <= MAX_QUANTITY; quantity++) {
+    options.append(new Option(String(quantity), String(quantity)));
+  }
+  form.elements[field].append(options);
+}
 let orders = [];
 let storageAvailable = true;
 let editingId = null;
+let deletingId = null;
 let filter = 'all';
 let installPrompt = null;
 let toastTimer;
+let venmoQR = null;
+let qrUploading = false;
 
 function notice(message) {
   $('#notice').textContent = message;
@@ -25,6 +37,11 @@ function toast(message) {
 try {
   const saved = localStorage.getItem(STORAGE_KEY);
   orders = saved === null ? [] : validateOrders(JSON.parse(saved));
+  if (orders.some(order => !order.paid)) {
+    const paidOrders = markOrdersPaid(orders);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(paidOrders));
+    orders = paidOrders;
+  }
   localStorage.setItem('pack47-storage-check', '1');
   localStorage.removeItem('pack47-storage-check');
 } catch (error) {
@@ -33,9 +50,9 @@ try {
 }
 
 function persist(nextOrders) {
-  validateOrders(nextOrders);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextOrders));
-  orders = nextOrders;
+  const paidOrders = markOrdersPaid(nextOrders);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(paidOrders));
+  orders = paidOrders;
   storageAvailable = true;
   $('#notice').hidden = true;
   render();
@@ -46,6 +63,37 @@ function element(tag, className, text) {
   node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function loadVenmoQR() {
+  try {
+    const image = localStorage.getItem(VENMO_QR_KEY);
+    venmoQR = image === null ? null : validateVenmoQR(image);
+  } catch (error) {
+    venmoQR = null;
+    notice(`Venmo QR code could not be loaded: ${error.message} Upload the screenshot again to replace it.`);
+  }
+}
+
+function updateVenmoDialog() {
+  $('#venmo-image').hidden = !venmoQR;
+  $('#venmo-empty').hidden = Boolean(venmoQR);
+  if (venmoQR) $('#venmo-image').src = venmoQR;
+  else $('#venmo-image').removeAttribute('src');
+  $('#venmo-upload-label').textContent = venmoQR ? 'Replace QR screenshot' : 'Upload QR screenshot';
+}
+
+function openVenmo(order = null) {
+  $('#venmo-context').textContent = order
+    ? `${order.name || 'This order'} · ${money(total(order))}`
+    : 'One shared code for all fundraiser orders';
+  $('#venmo-error').hidden = true;
+  updateVenmoDialog();
+  venmoDialog.showModal();
+}
+
+function updateVenmoLink() {
+  $('#order-venmo').hidden = form.elements.payment.value !== 'venmo';
 }
 
 function render() {
@@ -59,9 +107,10 @@ function render() {
   $('#list-count').textContent = orders.length;
   $('#add-order').disabled = $('#first-order').disabled = !storageAvailable;
   $('#export').disabled = $('#backup').disabled = !storageAvailable || !orders.length;
+  updateVenmoLink();
   const query = $('#search').value.trim().toLowerCase();
   const visible = orders.filter(order => [order.name, order.address, order.phone].some(value => value.toLowerCase().includes(query)))
-    .filter(order => filter === 'all' || (filter === 'unpaid' ? !order.paid : !order.delivered))
+    .filter(order => filter === 'all' || !order.delivered)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   $('#orders').replaceChildren();
   $('#empty').hidden = orders.length > 0 || !storageAvailable;
@@ -80,8 +129,14 @@ function render() {
     items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`), element('strong', '', money(total(order))));
     const status = element('div', 'status');
     const paymentName = order.payment === 'venmo' ? 'Venmo' : order.payment === 'cash' ? 'Cash' : 'Check';
-    status.append(element('span', `badge ${order.paid ? '' : 'waiting'}`, `${order.paid ? 'Paid' : 'Unpaid'} · ${paymentName}`),
+    status.append(element('span', 'badge', paymentName),
       element('span', `badge ${order.delivered ? '' : 'waiting'}`, order.delivered ? 'Delivered' : 'To deliver'));
+    if (order.payment === 'venmo') {
+      const qrLink = element('button', 'venmo-link', 'Show Venmo QR');
+      qrLink.setAttribute('aria-label', `Show Venmo QR for ${order.name}`);
+      qrLink.addEventListener('click', () => openVenmo(order));
+      status.append(qrLink);
+    }
     const edit = element('button', 'button quiet edit-order', 'Edit');
     edit.setAttribute('aria-label', `Edit order for ${order.name}`);
     edit.disabled = !storageAvailable;
@@ -106,10 +161,10 @@ function openOrder(order = null) {
   $('#form-error').hidden = true;
   if (order) {
     for (const key of ['name', 'address', 'phone', 'wreaths', 'candles', 'payment', 'location', 'notes']) form.elements[key].value = order[key];
-    form.elements.paid.checked = order.paid;
     form.elements.delivered.checked = order.delivered;
   }
   updateTotal();
+  updateVenmoLink();
   dialog.showModal();
   form.elements.name.focus();
 }
@@ -118,8 +173,61 @@ $('#add-order').addEventListener('click', () => openOrder());
 $('#first-order').addEventListener('click', () => openOrder());
 $('#close-dialog').addEventListener('click', () => dialog.close());
 $('#cancel-dialog').addEventListener('click', () => dialog.close());
-form.elements.wreaths.addEventListener('input', updateTotal);
-form.elements.candles.addEventListener('input', updateTotal);
+form.elements.wreaths.addEventListener('change', updateTotal);
+form.elements.candles.addEventListener('change', updateTotal);
+form.elements.payment.addEventListener('change', updateVenmoLink);
+$('#order-venmo').addEventListener('click', () => openVenmo({
+  name: form.elements.name.value.trim(),
+  wreaths: Number(form.elements.wreaths.value),
+  candles: Number(form.elements.candles.value),
+}));
+$('#manage-venmo').addEventListener('click', () => openVenmo());
+$('#close-venmo').addEventListener('click', () => venmoDialog.close());
+$('#venmo-file').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  if (!file || qrUploading) return;
+  qrUploading = true;
+  $('#venmo-file').disabled = true;
+  $('#venmo-error').hidden = true;
+  $('#venmo-upload-status').textContent = 'Saving QR screenshot...';
+  let imageURL;
+  try {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      throw new Error('Choose a PNG, JPEG, or WebP screenshot.');
+    }
+    if (file.size > 10 * 1024 * 1024) throw new Error('Screenshot must be smaller than 10 MB.');
+    const image = new Image();
+    imageURL = URL.createObjectURL(file);
+    image.src = imageURL;
+    await image.decode();
+    const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('This browser could not process the screenshot.');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const qr = validateVenmoQR(canvas.toDataURL('image/png'));
+    localStorage.setItem(VENMO_QR_KEY, qr);
+    venmoQR = qr;
+    updateVenmoDialog();
+    render();
+    $('#venmo-upload-status').textContent = 'Saved on this device. Check the account and QR code before accepting payment.';
+  } catch (error) {
+    $('#venmo-upload-status').textContent = '';
+    $('#venmo-error').textContent = `QR screenshot not saved: ${error.message}`;
+    $('#venmo-error').hidden = false;
+  } finally {
+    if (imageURL) URL.revokeObjectURL(imageURL);
+    qrUploading = false;
+    $('#venmo-file').disabled = false;
+    event.target.value = '';
+  }
+});
+$('#venmo-image').addEventListener('error', () => {
+  $('#venmo-error').textContent = 'The saved screenshot could not be displayed. Upload a new QR screenshot.';
+  $('#venmo-error').hidden = false;
+});
 form.addEventListener('submit', event => {
   event.preventDefault();
   try {
@@ -133,7 +241,7 @@ form.addEventListener('submit', event => {
       wreaths: Number(form.elements.wreaths.value),
       candles: Number(form.elements.candles.value),
       payment: form.elements.payment.value,
-      paid: form.elements.paid.checked,
+      paid: true,
       delivered: form.elements.delivered.checked,
       location: form.elements.location.value.trim(),
       notes: form.elements.notes.value.trim(),
@@ -149,14 +257,46 @@ form.addEventListener('submit', event => {
 });
 
 $('#delete-order').addEventListener('click', () => {
-  if (!confirm('Delete this order? This cannot be undone.')) return;
+  const order = orders.find(order => order.id === editingId);
+  if (!order) {
+    $('#form-error').textContent = 'Order not found. Reload before trying again.';
+    $('#form-error').hidden = false;
+    return;
+  }
+  deletingId = order.id;
+  $('#delete-form').reset();
+  $('#delete-name').textContent = order.name;
+  $('#delete-error').hidden = true;
+  $('#confirm-delete').disabled = true;
+  deleteDialog.showModal();
+  $('#delete-confirmation').focus();
+});
+
+$('#delete-confirmation').addEventListener('input', () => {
+  const order = orders.find(order => order.id === deletingId);
+  $('#confirm-delete').disabled = !order || $('#delete-confirmation').value !== order.name;
+});
+$('#cancel-delete').addEventListener('click', () => deleteDialog.close());
+$('#close-delete').addEventListener('click', () => deleteDialog.close());
+deleteDialog.addEventListener('close', () => {
+  deletingId = null;
+  $('#delete-form').reset();
+  $('#confirm-delete').disabled = true;
+});
+$('#delete-form').addEventListener('submit', event => {
+  event.preventDefault();
   try {
-    persist(orders.filter(order => order.id !== editingId));
+    const order = orders.find(order => order.id === deletingId);
+    if (!order || $('#delete-confirmation').value !== order.name) {
+      throw new Error("Type the customer's full name exactly as shown.");
+    }
+    persist(orders.filter(order => order.id !== deletingId));
+    deleteDialog.close();
     dialog.close();
     toast('Order deleted');
   } catch (error) {
-    $('#form-error').textContent = `Order not deleted: ${error.message}`;
-    $('#form-error').hidden = false;
+    $('#delete-error').textContent = `Order not deleted: ${error.message}`;
+    $('#delete-error').hidden = false;
   }
 });
 
@@ -198,7 +338,7 @@ $('#backup-file').addEventListener('change', async event => {
     const backup = JSON.parse(await file.text());
     if (backup.app !== 'pack47-evergreen' || backup.version !== 1) throw new Error('Choose an Evergreen backup file.');
     validateOrders(backup.orders);
-    if (!confirm(`Replace orders on this device with ${backup.orders.length} orders from this backup? Back up current orders first.`)) return;
+    if (!confirm(`Replace orders on this device with ${backup.orders.length} orders from this backup? All restored orders will be marked paid. Back up current orders first.`)) return;
     persist(backup.orders);
     toast('Backup restored');
   } catch (error) {
@@ -209,10 +349,22 @@ $('#backup-file').addEventListener('change', async event => {
 });
 
 window.addEventListener('storage', event => {
+  if (event.key === VENMO_QR_KEY) {
+    loadVenmoQR();
+    updateVenmoDialog();
+    render();
+    return;
+  }
   if (event.key !== STORAGE_KEY && event.key !== null) return;
+  if (event.key === null) {
+    loadVenmoQR();
+    updateVenmoDialog();
+  }
   // A second open tab must not silently overwrite an in-progress edit.
   storageAvailable = false;
+  if (deleteDialog.open) deleteDialog.close();
   if (dialog.open) dialog.close();
+  if (venmoDialog.open) venmoDialog.close();
   notice('Orders changed in another tab or browser storage was cleared. Reload before making more changes.');
   render();
 });
@@ -258,4 +410,5 @@ if ('serviceWorker' in navigator) {
   connection();
   notice('Offline installation needs HTTPS and a browser that supports service workers. Orders can still be saved while this page is open.');
 }
+loadVenmoQR();
 render();
