@@ -1,5 +1,5 @@
-const CACHE = 'pack47-evergreen-v3';
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './sales.js', './manifest.webmanifest', './icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'pack47-evergreen-v4';
+const ASSETS = ['./', './index.html', './styles.css', './app.js', './sales.js', './storage.js', './images.js', './manifest.webmanifest', './icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));

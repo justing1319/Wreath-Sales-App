@@ -1,10 +1,13 @@
-import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, toCSV } from './sales.js';
+import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { loadOrders, saveOrders } from './storage.js';
+import { readImage } from './images.js';
 
 const $ = selector => document.querySelector(selector);
 const form = $('#order-form');
 const dialog = $('#order-dialog');
 const deleteDialog = $('#delete-dialog');
 const venmoDialog = $('#venmo-dialog');
+const deliveryDialog = $('#delivery-dialog');
 for (const field of ['wreaths', 'candles']) {
   const options = document.createDocumentFragment();
   for (let quantity = 1; quantity <= MAX_QUANTITY; quantity++) {
@@ -13,7 +16,15 @@ for (const field of ['wreaths', 'candles']) {
   form.elements[field].append(options);
 }
 let orders = [];
-let storageAvailable = true;
+let storageAvailable = false;
+let revision = null;
+let saving = false;
+let loading = true;
+let mode = 'sales';
+let deliveryId = null;
+let deliveryPhoto = null;
+let deliveryBusy = false;
+const orderChannel = 'BroadcastChannel' in window ? new BroadcastChannel('pack47-orders') : null;
 let editingId = null;
 let deletingId = null;
 let filter = 'all';
@@ -34,28 +45,21 @@ function toast(message) {
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 4000);
 }
 
-try {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  orders = saved === null ? [] : validateOrders(JSON.parse(saved));
-  if (orders.some(order => !order.paid)) {
-    const paidOrders = markOrdersPaid(orders);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(paidOrders));
-    orders = paidOrders;
-  }
-  localStorage.setItem('pack47-storage-check', '1');
-  localStorage.removeItem('pack47-storage-check');
-} catch (error) {
-  storageAvailable = false;
-  notice(`Orders could not be loaded safely: ${error.message} Saving is disabled to protect existing data. Restore a valid backup or enable browser storage and reload.`);
-}
-
-function persist(nextOrders) {
+async function persist(nextOrders) {
+  if (saving) throw new Error('Another change is still saving. Please wait.');
   const paidOrders = markOrdersPaid(nextOrders);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(paidOrders));
-  orders = paidOrders;
-  storageAvailable = true;
-  $('#notice').hidden = true;
+  saving = true;
   render();
+  try {
+    revision = await saveOrders(paidOrders, revision);
+    orders = paidOrders;
+    storageAvailable = true;
+    $('#notice').hidden = true;
+    orderChannel?.postMessage({ revision });
+  } finally {
+    saving = false;
+    render();
+  }
 }
 
 function element(tag, className, text) {
@@ -105,18 +109,42 @@ function render() {
   $('#pending-count').textContent = sums.pending;
   $('#collected').textContent = `${money(sums.collected)} collected`;
   $('#list-count').textContent = orders.length;
-  $('#add-order').disabled = $('#first-order').disabled = !storageAvailable;
-  $('#export').disabled = $('#backup').disabled = !storageAvailable || !orders.length;
+  $('#add-order').disabled = $('#first-order').disabled = !storageAvailable || saving;
+  $('#export').disabled = $('#backup').disabled = !storageAvailable || saving || !orders.length;
+  $('#restore').disabled = saving || loading;
+  $('#order-form button[type=submit]').disabled = saving;
+  $('#delete-order').disabled = saving;
+  $('#confirm-delete').disabled = saving || !deletingId ||
+    $('#delete-confirmation').value !== orders.find(order => order.id === deletingId)?.name;
+  $('#section-title').textContent = mode === 'delivery' ? 'Your deliveries' : 'Your orders';
+  $('#section-description').textContent = mode === 'delivery'
+    ? `${sums.pending} to deliver · ${orders.length - sums.pending} delivered`
+    : 'From the first doorstep to the last delivery.';
+  $('#add-order').hidden = mode === 'delivery';
+  $('[data-filter=delivered]').hidden = mode !== 'delivery';
+  document.querySelectorAll('.filter').forEach(button => {
+    button.classList.toggle('active', button.dataset.filter === filter);
+    button.setAttribute('aria-pressed', String(button.dataset.filter === filter));
+  });
+  updateDeliveryControls();
   updateVenmoLink();
   const query = $('#search').value.trim().toLowerCase();
   const visible = orders.filter(order => [order.name, order.address, order.phone].some(value => value.toLowerCase().includes(query)))
-    .filter(order => filter === 'all' || !order.delivered)
+    .filter(order => filter === 'all' || (filter === 'pending' ? !order.delivered : order.delivered))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   $('#orders').replaceChildren();
   $('#empty').hidden = orders.length > 0 || !storageAvailable;
   $('#no-results').hidden = !orders.length || visible.length > 0;
+  $('#first-order').hidden = mode === 'delivery';
+  $('#empty-title').textContent = mode === 'delivery' ? 'No orders to deliver yet' : 'Your next sale starts here';
+  $('#empty-description').textContent = mode === 'delivery'
+    ? 'Collect orders in Sales mode, then return here for the delivery round.'
+    : 'Add your first order and leave the paper sheet at home.';
+  $('#no-results').textContent = mode === 'delivery' && filter === 'pending' && !query
+    ? 'All orders delivered. Switch to Delivered to view delivery records and photos.'
+    : 'No matching orders. Try another search or filter.';
   for (const order of visible) {
-    const card = element('article', 'order-card');
+    const card = element('article', `order-card${mode === 'delivery' ? ' delivery-card' : ''}`);
     const customer = element('div', 'customer');
     customer.append(element('strong', '', order.name), element('p', '', order.address));
     if (order.phone) {
@@ -125,22 +153,25 @@ function render() {
       customer.append(phone);
     }
     if (order.location) customer.append(element('p', '', `Leave at: ${order.location}`));
+    if (mode === 'delivery' && order.notes) customer.append(element('p', '', `Notes: ${order.notes}`));
     const items = element('div', 'items');
     items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`), element('strong', '', money(total(order))));
     const status = element('div', 'status');
     const paymentName = order.payment === 'venmo' ? 'Venmo' : order.payment === 'cash' ? 'Cash' : 'Check';
     status.append(element('span', 'badge', paymentName),
       element('span', `badge ${order.delivered ? '' : 'waiting'}`, order.delivered ? 'Delivered' : 'To deliver'));
+    if (mode === 'delivery' && order.deliveryPhoto) status.append(element('span', 'badge', 'Photo saved'));
     if (order.payment === 'venmo') {
       const qrLink = element('button', 'venmo-link', 'Show Venmo QR');
       qrLink.setAttribute('aria-label', `Show Venmo QR for ${order.name}`);
       qrLink.addEventListener('click', () => openVenmo(order));
       status.append(qrLink);
     }
-    const edit = element('button', 'button quiet edit-order', 'Edit');
-    edit.setAttribute('aria-label', `Edit order for ${order.name}`);
-    edit.disabled = !storageAvailable;
-    edit.addEventListener('click', () => openOrder(order));
+    const edit = element('button', mode === 'delivery' ? 'button green delivery-action' : 'button quiet edit-order',
+      mode === 'delivery' ? (order.delivered ? 'View delivery' : 'Deliver') : 'Edit');
+    edit.setAttribute('aria-label', `${mode === 'delivery' ? 'Open delivery' : 'Edit order'} for ${order.name}`);
+    edit.disabled = !storageAvailable || saving;
+    edit.addEventListener('click', () => mode === 'delivery' ? openDelivery(order) : openOrder(order));
     card.append(customer, items, status, edit);
     $('#orders').append(card);
   }
@@ -161,7 +192,6 @@ function openOrder(order = null) {
   $('#form-error').hidden = true;
   if (order) {
     for (const key of ['name', 'address', 'phone', 'wreaths', 'candles', 'payment', 'location', 'notes']) form.elements[key].value = order[key];
-    form.elements.delivered.checked = order.delivered;
   }
   updateTotal();
   updateVenmoLink();
@@ -171,8 +201,8 @@ function openOrder(order = null) {
 
 $('#add-order').addEventListener('click', () => openOrder());
 $('#first-order').addEventListener('click', () => openOrder());
-$('#close-dialog').addEventListener('click', () => dialog.close());
-$('#cancel-dialog').addEventListener('click', () => dialog.close());
+$('#close-dialog').addEventListener('click', () => { if (!saving) dialog.close(); });
+$('#cancel-dialog').addEventListener('click', () => { if (!saving) dialog.close(); });
 form.elements.wreaths.addEventListener('change', updateTotal);
 form.elements.candles.addEventListener('change', updateTotal);
 form.elements.payment.addEventListener('change', updateVenmoLink);
@@ -190,24 +220,12 @@ $('#venmo-file').addEventListener('change', async event => {
   $('#venmo-file').disabled = true;
   $('#venmo-error').hidden = true;
   $('#venmo-upload-status').textContent = 'Saving QR screenshot...';
-  let imageURL;
   try {
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       throw new Error('Choose a PNG, JPEG, or WebP screenshot.');
     }
     if (file.size > 10 * 1024 * 1024) throw new Error('Screenshot must be smaller than 10 MB.');
-    const image = new Image();
-    imageURL = URL.createObjectURL(file);
-    image.src = imageURL;
-    await image.decode();
-    const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('This browser could not process the screenshot.');
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const qr = validateVenmoQR(canvas.toDataURL('image/png'));
+    const qr = validateVenmoQR(await readImage(file, { format: 'image/png', maxDimension: 1600 }));
     localStorage.setItem(VENMO_QR_KEY, qr);
     venmoQR = qr;
     updateVenmoDialog();
@@ -218,7 +236,6 @@ $('#venmo-file').addEventListener('change', async event => {
     $('#venmo-error').textContent = `QR screenshot not saved: ${error.message}`;
     $('#venmo-error').hidden = false;
   } finally {
-    if (imageURL) URL.revokeObjectURL(imageURL);
     qrUploading = false;
     $('#venmo-file').disabled = false;
     event.target.value = '';
@@ -228,8 +245,9 @@ $('#venmo-image').addEventListener('error', () => {
   $('#venmo-error').textContent = 'The saved screenshot could not be displayed. Upload a new QR screenshot.';
   $('#venmo-error').hidden = false;
 });
-form.addEventListener('submit', event => {
+form.addEventListener('submit', async event => {
   event.preventDefault();
+  if (saving) return;
   try {
     const previous = orders.find(order => order.id === editingId);
     const order = {
@@ -242,12 +260,14 @@ form.addEventListener('submit', event => {
       candles: Number(form.elements.candles.value),
       payment: form.elements.payment.value,
       paid: true,
-      delivered: form.elements.delivered.checked,
+      delivered: previous?.delivered ?? false,
+      deliveredAt: previous?.deliveredAt ?? null,
+      deliveryPhoto: previous?.deliveryPhoto ?? null,
       location: form.elements.location.value.trim(),
       notes: form.elements.notes.value.trim(),
     };
     validateOrder(order);
-    persist(editingId ? orders.map(existing => existing.id === editingId ? order : existing) : [...orders, order]);
+    await persist(editingId ? orders.map(existing => existing.id === editingId ? order : existing) : [...orders, order]);
     dialog.close();
     toast(editingId ? 'Order updated' : 'Order saved on this device');
   } catch (error) {
@@ -276,21 +296,22 @@ $('#delete-confirmation').addEventListener('input', () => {
   const order = orders.find(order => order.id === deletingId);
   $('#confirm-delete').disabled = !order || $('#delete-confirmation').value !== order.name;
 });
-$('#cancel-delete').addEventListener('click', () => deleteDialog.close());
-$('#close-delete').addEventListener('click', () => deleteDialog.close());
+$('#cancel-delete').addEventListener('click', () => { if (!saving) deleteDialog.close(); });
+$('#close-delete').addEventListener('click', () => { if (!saving) deleteDialog.close(); });
 deleteDialog.addEventListener('close', () => {
   deletingId = null;
   $('#delete-form').reset();
   $('#confirm-delete').disabled = true;
 });
-$('#delete-form').addEventListener('submit', event => {
+$('#delete-form').addEventListener('submit', async event => {
   event.preventDefault();
+  if (saving) return;
   try {
     const order = orders.find(order => order.id === deletingId);
     if (!order || $('#delete-confirmation').value !== order.name) {
       throw new Error("Type the customer's full name exactly as shown.");
     }
-    persist(orders.filter(order => order.id !== deletingId));
+    await persist(orders.filter(order => order.id !== deletingId));
     deleteDialog.close();
     dialog.close();
     toast('Order deleted');
@@ -303,12 +324,145 @@ $('#delete-form').addEventListener('submit', event => {
 $('#search').addEventListener('input', render);
 document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => {
   filter = button.dataset.filter;
-  document.querySelectorAll('.filter').forEach(item => {
-    item.classList.toggle('active', item === button);
-    item.setAttribute('aria-pressed', String(item === button));
-  });
   render();
 }));
+
+function switchMode(nextMode) {
+  mode = nextMode;
+  filter = mode === 'delivery' ? 'pending' : 'all';
+  $('#search').value = '';
+  for (const value of ['sales', 'delivery']) {
+    $(`#${value}-mode`).className = `button ${mode === value ? 'green' : 'quiet'}`;
+    $(`#${value}-mode`).setAttribute('aria-pressed', String(mode === value));
+  }
+  render();
+}
+$('#sales-mode').addEventListener('click', () => switchMode('sales'));
+$('#delivery-mode').addEventListener('click', () => switchMode('delivery'));
+
+function updateDeliveryControls() {
+  const order = orders.find(order => order.id === deliveryId);
+  const busy = deliveryBusy || saving;
+  $('#delivery-photo-controls').disabled = busy;
+  $('#save-delivery').disabled = busy || !storageAvailable;
+  $('#undo-delivery').disabled = busy || !storageAvailable;
+  $('#close-delivery').disabled = $('#cancel-delivery').disabled = busy;
+  $('#undo-delivery').hidden = !order?.delivered;
+  $('#save-delivery').textContent = order?.delivered ? 'Save delivery photo'
+    : deliveryPhoto ? 'Save photo & mark delivered' : 'Mark delivered without photo';
+  if (order?.delivered && deliveryPhoto === (order.deliveryPhoto ?? null)) $('#save-delivery').disabled = true;
+}
+
+function openDelivery(order) {
+  deliveryId = order.id;
+  deliveryPhoto = order.deliveryPhoto ?? null;
+  $('#delivery-form').reset();
+  $('#delivery-title').textContent = order.delivered ? 'Delivery record' : 'Record delivery';
+  $('#delivery-error').hidden = true;
+  $('#delivery-progress').textContent = '';
+  $('#delivery-details').replaceChildren(
+    element('strong', '', order.name), element('p', '', order.address),
+    element('p', '', `${order.wreaths} wreaths · ${order.candles} candles`),
+    element('p', '', `Leave at: ${order.location || 'No location specified'}`),
+    element('p', '', order.notes ? `Notes: ${order.notes}` : ''),
+  );
+  if (order.phone) {
+    const phone = element('a', '', order.phone);
+    phone.href = `tel:${order.phone.replace(/[^+\d]/g, '')}`;
+    $('#delivery-details').append(phone);
+  }
+  $('#delivery-status').textContent = order.delivered
+    ? `Delivered${order.deliveredAt ? ` on ${new Date(order.deliveredAt).toLocaleString()}` : ' (from an earlier record)'}`
+    : 'Not yet delivered. Save after leaving the items.';
+  showDeliveryPhoto();
+  updateDeliveryControls();
+  deliveryDialog.showModal();
+}
+
+function showDeliveryPhoto() {
+  $('#delivery-image').hidden = !deliveryPhoto;
+  if (deliveryPhoto) $('#delivery-image').src = deliveryPhoto;
+  else $('#delivery-image').removeAttribute('src');
+}
+
+async function chooseDeliveryPhoto(event) {
+  const file = event.target.files[0];
+  if (!file || deliveryBusy || saving) return;
+  deliveryBusy = true;
+  $('#delivery-error').hidden = true;
+  $('#delivery-progress').textContent = 'Preparing photo...';
+  updateDeliveryControls();
+  try {
+    deliveryPhoto = validateDeliveryPhoto(await readImage(file));
+    showDeliveryPhoto();
+    $('#delivery-progress').textContent = 'Photo ready. Tap Save to record this delivery.';
+  } catch (error) {
+    $('#delivery-progress').textContent = '';
+    $('#delivery-error').textContent = `Photo not added: ${error.message}`;
+    $('#delivery-error').hidden = false;
+  } finally {
+    deliveryBusy = false;
+    event.target.value = '';
+    updateDeliveryControls();
+  }
+}
+$('#delivery-camera').addEventListener('change', chooseDeliveryPhoto);
+$('#delivery-file').addEventListener('change', chooseDeliveryPhoto);
+$('#delivery-image').addEventListener('error', () => {
+  $('#delivery-error').textContent = 'This delivery photo could not be displayed. Choose a replacement photo.';
+  $('#delivery-error').hidden = false;
+});
+
+function closeDelivery() {
+  if (deliveryBusy || saving) return;
+  if (deliveryPhoto !== (orders.find(order => order.id === deliveryId)?.deliveryPhoto ?? null) &&
+      !confirm('Discard this unsaved delivery photo?')) return;
+  deliveryDialog.close();
+}
+$('#close-delivery').addEventListener('click', closeDelivery);
+$('#cancel-delivery').addEventListener('click', closeDelivery);
+deliveryDialog.addEventListener('cancel', event => {
+  event.preventDefault();
+  closeDelivery();
+});
+deliveryDialog.addEventListener('close', () => {
+  deliveryId = null;
+  deliveryPhoto = null;
+  $('#delivery-image').removeAttribute('src');
+});
+for (const modal of [dialog, deleteDialog]) modal.addEventListener('cancel', event => {
+  if (saving) event.preventDefault();
+});
+
+$('#delivery-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (deliveryBusy || saving) return;
+  try {
+    const order = orders.find(order => order.id === deliveryId);
+    if (!order) throw new Error('Order not found. Reload before trying again.');
+    const updated = { ...order, delivered: true, deliveredAt: order.deliveredAt ?? new Date().toISOString(), deliveryPhoto };
+    await persist(orders.map(existing => existing.id === deliveryId ? updated : existing));
+    deliveryDialog.close();
+    toast('Delivery saved on this device');
+  } catch (error) {
+    $('#delivery-error').textContent = `Delivery not saved: ${error.message}`;
+    $('#delivery-error').hidden = false;
+  }
+});
+$('#undo-delivery').addEventListener('click', async () => {
+  if (saving || deliveryBusy || !confirm('Mark this order as not delivered? Its delivery date and photo will be removed.')) return;
+  try {
+    const order = orders.find(order => order.id === deliveryId);
+    if (!order) throw new Error('Order not found. Reload before trying again.');
+    await persist(orders.map(existing => existing.id === deliveryId
+      ? { ...existing, delivered: false, deliveredAt: null, deliveryPhoto: null } : existing));
+    deliveryDialog.close();
+    toast('Order returned to the delivery list');
+  } catch (error) {
+    $('#delivery-error').textContent = `Delivery not changed: ${error.message}`;
+    $('#delivery-error').hidden = false;
+  }
+});
 
 function download(content, type, extension) {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -326,20 +480,20 @@ $('#export').addEventListener('click', () => {
   toast('Spreadsheet export requested');
 });
 $('#backup').addEventListener('click', () => {
-  download(JSON.stringify({ app: 'pack47-evergreen', version: 1, orders }, null, 2), 'application/json', 'json');
+  download(JSON.stringify({ app: 'pack47-evergreen', version: 2, orders }, null, 2), 'application/json', 'json');
   toast('Backup download requested. Keep the file somewhere safe.');
 });
 $('#restore').addEventListener('click', () => $('#backup-file').click());
 $('#backup-file').addEventListener('change', async event => {
   const file = event.target.files[0];
-  if (!file) return;
+  if (!file || saving) return;
   try {
-    if (file.size > 10 * 1024 * 1024) throw new Error('Backup must be smaller than 10 MB.');
+    if (file.size > 100 * 1024 * 1024) throw new Error('Backup must be smaller than 100 MB.');
     const backup = JSON.parse(await file.text());
-    if (backup.app !== 'pack47-evergreen' || backup.version !== 1) throw new Error('Choose an Evergreen backup file.');
+    if (backup.app !== 'pack47-evergreen' || ![1, 2].includes(backup.version)) throw new Error('Choose an Evergreen backup file.');
     validateOrders(backup.orders);
     if (!confirm(`Replace orders on this device with ${backup.orders.length} orders from this backup? All restored orders will be marked paid. Back up current orders first.`)) return;
-    persist(backup.orders);
+    await persist(backup.orders);
     toast('Backup restored');
   } catch (error) {
     notice(`Backup not restored: ${error.message}`);
@@ -348,6 +502,18 @@ $('#backup-file').addEventListener('change', async event => {
   }
 });
 
+function invalidateOrders() {
+  storageAvailable = false;
+  if (deleteDialog.open) deleteDialog.close();
+  if (dialog.open) dialog.close();
+  if (venmoDialog.open) venmoDialog.close();
+  if (deliveryDialog.open && !deliveryBusy) deliveryDialog.close();
+  notice('Orders changed in another tab or browser storage was cleared. Reload before making more changes.');
+  render();
+}
+if (orderChannel) orderChannel.onmessage = event => {
+  if (event.data.revision !== revision) invalidateOrders();
+};
 window.addEventListener('storage', event => {
   if (event.key === VENMO_QR_KEY) {
     loadVenmoQR();
@@ -360,13 +526,7 @@ window.addEventListener('storage', event => {
     loadVenmoQR();
     updateVenmoDialog();
   }
-  // A second open tab must not silently overwrite an in-progress edit.
-  storageAvailable = false;
-  if (deleteDialog.open) deleteDialog.close();
-  if (dialog.open) dialog.close();
-  if (venmoDialog.open) venmoDialog.close();
-  notice('Orders changed in another tab or browser storage was cleared. Reload before making more changes.');
-  render();
+  invalidateOrders();
 });
 
 window.addEventListener('beforeinstallprompt', event => {
@@ -411,4 +571,15 @@ if ('serviceWorker' in navigator) {
   notice('Offline installation needs HTTPS and a browser that supports service workers. Orders can still be saved while this page is open.');
 }
 loadVenmoQR();
+render();
+try {
+  const snapshot = await loadOrders();
+  orders = snapshot.orders;
+  revision = snapshot.revision;
+  storageAvailable = true;
+} catch (error) {
+  if (typeof error.revision === 'string') revision = error.revision;
+  notice(`Orders could not be loaded safely: ${error.message} Saving is disabled to protect existing data. Restore a valid backup or enable browser storage and reload.`);
+}
+loading = false;
 render();

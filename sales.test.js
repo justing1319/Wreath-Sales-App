@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_QUANTITY, MAX_QR_LENGTH, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, toCSV } from './sales.js';
+import { MAX_QUANTITY, MAX_QR_LENGTH, MAX_DELIVERY_PHOTO_LENGTH, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 
 const order = overrides => ({
   id: 'test-order', name: 'Test Customer', address: '12 Example St', phone: '555-0100',
@@ -60,4 +60,27 @@ test('Venmo QR storage accepts only bounded embedded PNG images', () => {
     'data:image/svg+xml;base64,AAAA', 'data:image/png;base64,not-a-png',
     `${prefix}<script>`, prefix + 'A'.repeat(MAX_QR_LENGTH - prefix.length + 1),
   ]) assert.throws(() => validateVenmoQR(invalid));
+});
+test('delivery records support optional evidence and preserve it in backups', () => {
+  const photo = 'data:image/jpeg;base64,/9j/AAAA==';
+  const delivered = order({ delivered: true, deliveredAt: '2026-12-01T12:00:00.000Z', deliveryPhoto: photo });
+  assert.deepEqual(validateOrders(JSON.parse(JSON.stringify([delivered]))), [delivered]);
+  assert.equal(markOrdersPaid([delivered])[0].deliveryPhoto, photo);
+  assert.equal(validateOrder(order({ delivered: true })).delivered, true);
+  assert.equal(validateOrder(order({ deliveredAt: null, deliveryPhoto: null })).delivered, false);
+  assert.ok(toCSV([delivered]).includes('"2026-12-01T12:00:00.000Z","Yes"'));
+  assert.equal(summary([delivered, order({ id: 'pending' })]).pending, 1);
+  for (const invalid of [
+    { deliveryPhoto: photo }, { deliveredAt: '2026-12-01' },
+    { delivered: true, deliveredAt: 'invalid' },
+    { delivered: true, deliveryPhoto: 'https://example.com/photo.jpg' },
+    { delivered: true, deliveryPhoto: 'data:image/svg+xml;base64,AAAA' },
+  ]) assert.throws(() => validateOrder(order(invalid)));
+});
+test('delivery photos have an exact encoded size limit and safe image type', () => {
+  const prefix = 'data:image/jpeg;base64,/9j/';
+  assert.equal(validateDeliveryPhoto(prefix + 'A'.repeat(MAX_DELIVERY_PHOTO_LENGTH - prefix.length)).length, MAX_DELIVERY_PHOTO_LENGTH);
+  assert.throws(() => validateDeliveryPhoto(prefix + 'A'.repeat(MAX_DELIVERY_PHOTO_LENGTH - prefix.length + 1)));
+  assert.throws(() => validateDeliveryPhoto(null));
+  assert.throws(() => validateDeliveryPhoto('javascript:alert(1)'));
 });
