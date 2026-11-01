@@ -21,6 +21,7 @@
   <main>
     <div class="intro"><div><p class="eyebrow">Holliston Cub Scouts · Pack 47</p><h1>A little holiday cheer.<br>A lot of good.</h1><p class="subheading">Your neighborhood sales, all in one place.</p></div><div class="season"><span aria-hidden="true">✳</span> Wreath & candle fundraiser</div></div>
     <div id="notice" class="notice" role="alert" hidden></div>
+    <nav class="mode-switch" aria-label="App mode"><button id="sales-mode" class="button green" aria-pressed="true">Sales mode</button><button id="delivery-mode" class="button quiet" aria-pressed="false">Delivery mode</button></nav>
     <section class="stats" aria-label="Sales summary">
       <div class="stat primary"><span>Total sales</span><strong id="sales">$0</strong><small id="order-count">0 orders this season</small></div>
       <div class="stat"><span>Wreaths sold</span><strong id="wreath-count">0</strong><small>$20 each</small></div>
@@ -28,10 +29,10 @@
       <div class="stat"><span>Ready to deliver</span><strong id="pending-count">0</strong><small id="collected">$0 collected</small></div>
     </section>
     <section class="orders-section">
-      <div class="section-heading"><div><h2>Your orders <span id="list-count" class="count">0</span></h2><p>From the first doorstep to the last delivery.</p></div><button id="add-order" class="button green"><span aria-hidden="true">+</span> New order</button></div>
-      <div class="toolbar"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search name, address, or phone" aria-label="Search orders"></label><div class="filters" role="group" aria-label="Filter orders"><button class="filter active" data-filter="all" aria-pressed="true">All orders</button><button class="filter" data-filter="pending" aria-pressed="false">To deliver</button></div><button id="export" class="button quiet export">Export CSV <span aria-hidden="true">↓</span></button></div>
+      <div class="section-heading"><div><h2><span id="section-title">Your orders</span> <span id="list-count" class="count">0</span></h2><p id="section-description">From the first doorstep to the last delivery.</p></div><button id="add-order" class="button green"><span aria-hidden="true">+</span> New order</button></div>
+      <div class="toolbar"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search name, address, or phone" aria-label="Search orders"></label><div class="filters" role="group" aria-label="Filter orders"><button class="filter active" data-filter="all" aria-pressed="true">All orders</button><button class="filter" data-filter="pending" aria-pressed="false">To deliver</button><button class="filter" data-filter="delivered" aria-pressed="false" hidden>Delivered</button></div><button id="export" class="button quiet export">Export CSV <span aria-hidden="true">↓</span></button></div>
       <div id="orders" class="order-list"></div>
-      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">✳</div><h3>Your next sale starts here</h3><p>Add your first order and leave the paper sheet at home.</p><button id="first-order" class="button green">+ Add your first order</button></div>
+      <div id="empty" class="empty"><div class="empty-icon" aria-hidden="true">✳</div><h3 id="empty-title">Your next sale starts here</h3><p id="empty-description">Add your first order and leave the paper sheet at home.</p><button id="first-order" class="button green">+ Add your first order</button></div>
       <p id="no-results" class="empty" hidden>No matching orders. Try another search or filter.</p>
     </section>
     <aside class="reminder"><span aria-hidden="true">✧</span><div><strong>A small reminder for a big difference</strong><p>Checks payable to <b>Holliston Pack 47</b>. Remember to note where to leave each delivery.</p></div></aside>
@@ -42,9 +43,24 @@
       <div class="dialog-heading"><div><p class="eyebrow">One doorstep at a time</p><h2 id="dialog-title">New order</h2></div><button type="button" class="close" id="close-dialog" aria-label="Close order form">×</button></div>
       <fieldset><legend>Customer details</legend><label>Name <span>*</span><input name="name" autocomplete="name" required maxlength="200" placeholder="Customer's full name"></label><label>Address <span>*</span><input name="address" autocomplete="street-address" required maxlength="500" placeholder="Street address"></label><label>Phone<input name="phone" type="tel" autocomplete="tel" maxlength="100" placeholder="For delivery updates"></label></fieldset>
       <fieldset><legend>The holiday goods</legend><div class="products"><label class="product"><span>✳ <b>Wreaths</b><small>$20 each</small></span><select name="wreaths" aria-label="Wreath quantity" required><option value="0" selected>0</option></select></label><label class="product"><span>♧ <b>Candles</b><small>$13 each</small></span><select name="candles" aria-label="Candle quantity" required><option value="0" selected>0</option></select></label></div><div class="order-total"><span>Order total</span><strong id="form-total">$0</strong></div></fieldset>
-      <fieldset><legend>Payment & delivery</legend><label>Payment method<select name="payment"><option value="cash">Cash</option><option value="check">Check</option><option value="venmo">Venmo</option></select></label><button type="button" id="order-venmo" class="button quiet" hidden>Show Venmo QR</button><label>Delivery location<input name="location" maxlength="500" placeholder="e.g. Front steps or side door"></label><label class="checkbox"><input name="delivered" type="checkbox">Order delivered</label><label>Notes<textarea name="notes" rows="2" maxlength="2000" placeholder="Anything to remember?"></textarea></label></fieldset>
+      <fieldset><legend>Payment & delivery instructions</legend><label>Payment method<select name="payment"><option value="cash">Cash</option><option value="check">Check</option><option value="venmo">Venmo</option></select></label><button type="button" id="order-venmo" class="button quiet" hidden>Show Venmo QR</button><label>Delivery location<input name="location" maxlength="500" placeholder="e.g. Front steps or side door"></label><label>Notes<textarea name="notes" rows="2" maxlength="2000" placeholder="Anything to remember?"></textarea></label></fieldset>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <div class="form-actions"><button type="button" id="delete-order" class="button danger" hidden>Delete order</button><button type="button" id="cancel-dialog" class="button quiet">Cancel</button><button type="submit" class="button green">Save order</button></div>
+    </form>
+  </dialog>
+  <dialog id="delivery-dialog" aria-labelledby="delivery-title">
+    <form id="delivery-form" class="install-content">
+      <div class="dialog-heading"><h2 id="delivery-title">Record delivery</h2><button type="button" class="close" id="close-delivery" aria-label="Close delivery">×</button></div>
+      <div id="delivery-details" class="delivery-details"></div>
+      <p id="delivery-status"></p>
+      <img id="delivery-image" class="delivery-image" alt="Photo of this delivered order" hidden>
+      <fieldset id="delivery-photo-controls"><legend>Delivery photo (optional)</legend><div class="photo-actions">
+        <label class="button quiet venmo-upload">Take photo<input id="delivery-camera" type="file" accept="image/*" capture="environment"></label>
+        <label class="button quiet venmo-upload">Choose photo<input id="delivery-file" type="file" accept="image/*"></label>
+      </div><p>Photograph the items where you left them. Avoid including people or private details. Photos stay on this device and are included in order backups.</p></fieldset>
+      <p id="delivery-progress" role="status"></p>
+      <p id="delivery-error" class="form-error" role="alert" hidden></p>
+      <div class="form-actions"><button type="button" id="undo-delivery" class="button danger" hidden>Undo delivery</button><button type="button" id="cancel-delivery" class="button quiet">Cancel</button><button type="submit" id="save-delivery" class="button green">Mark delivered without photo</button></div>
     </form>
   </dialog>
   <dialog id="venmo-dialog" aria-labelledby="venmo-title">
