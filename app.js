@@ -1,4 +1,4 @@
-import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 import { loadOrders, saveOrders } from './storage.js';
 import { readImage } from './images.js';
 
@@ -108,6 +108,7 @@ function render() {
   $('#candle-count').textContent = sums.candles;
   $('#pending-count').textContent = sums.pending;
   $('#collected').textContent = `${money(sums.collected)} collected`;
+  $('#donation-summary').textContent = `${money(sums.donations)} in donations`;
   $('#list-count').textContent = orders.length;
   $('#add-order').disabled = $('#first-order').disabled = !storageAvailable || saving;
   $('#export').disabled = $('#backup').disabled = !storageAvailable || saving || !orders.length;
@@ -118,9 +119,10 @@ function render() {
     $('#delete-confirmation').value !== orders.find(order => order.id === deletingId)?.name;
   $('#section-title').textContent = mode === 'delivery' ? 'Your deliveries' : 'Your orders';
   $('#section-description').textContent = mode === 'delivery'
-    ? `${sums.pending} to deliver · ${orders.length - sums.pending} delivered`
+    ? `${sums.pending} to deliver · ${orders.filter(order => needsDelivery(order) && order.delivered).length} delivered`
     : 'From the first doorstep to the last delivery.';
   $('#add-order').hidden = mode === 'delivery';
+  $('#delivery-route').hidden = mode !== 'delivery';
   $('[data-filter=delivered]').hidden = mode !== 'delivery';
   document.querySelectorAll('.filter').forEach(button => {
     button.classList.toggle('active', button.dataset.filter === filter);
@@ -130,8 +132,9 @@ function render() {
   updateVenmoLink();
   const query = $('#search').value.trim().toLowerCase();
   const visible = orders.filter(order => [order.name, order.address, order.phone].some(value => value.toLowerCase().includes(query)))
-    .filter(order => filter === 'all' || (filter === 'pending' ? !order.delivered : order.delivered))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .filter(order => mode !== 'delivery' || needsDelivery(order))
+    .filter(order => filter === 'all' || (needsDelivery(order) && (filter === 'pending' ? !order.delivered : order.delivered)))
+    .sort(mode === 'delivery' ? compareDeliveryOrders : (a, b) => b.createdAt.localeCompare(a.createdAt));
   $('#orders').replaceChildren();
   $('#empty').hidden = orders.length > 0 || !storageAvailable;
   $('#no-results').hidden = !orders.length || visible.length > 0;
@@ -155,11 +158,13 @@ function render() {
     if (order.location) customer.append(element('p', '', `Leave at: ${order.location}`));
     if (mode === 'delivery' && order.notes) customer.append(element('p', '', `Notes: ${order.notes}`));
     const items = element('div', 'items');
-    items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`), element('strong', '', money(total(order))));
+    if (needsDelivery(order)) items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`));
+    if (order.donation) items.append(element('div', '', `${money(order.donation)} donation`));
+    items.append(element('strong', '', money(total(order))));
     const status = element('div', 'status');
     const paymentName = order.payment === 'venmo' ? 'Venmo' : order.payment === 'cash' ? 'Cash' : 'Check';
     status.append(element('span', 'badge', paymentName),
-      element('span', `badge ${order.delivered ? '' : 'waiting'}`, order.delivered ? 'Delivered' : 'To deliver'));
+      element('span', `badge ${!needsDelivery(order) || order.delivered ? '' : 'waiting'}`, !needsDelivery(order) ? 'No delivery needed' : order.delivered ? 'Delivered' : 'To deliver'));
     if (mode === 'delivery' && order.deliveryPhoto) status.append(element('span', 'badge', 'Photo saved'));
     if (order.payment === 'venmo') {
       const qrLink = element('button', 'venmo-link', 'Show Venmo QR');
@@ -180,8 +185,16 @@ function render() {
 function updateTotal() {
   const wreaths = Number(form.elements.wreaths.value);
   const candles = Number(form.elements.candles.value);
-  $('#form-total').textContent = Number.isInteger(wreaths) && wreaths >= 0 && Number.isInteger(candles) && candles >= 0
-    ? money(total({ wreaths, candles })) : 'Enter quantities';
+  const donation = Number(form.elements.donation.value);
+  form.elements.address.required = needsDelivery({ wreaths, candles }) || donation <= 0;
+  $('#address-required').hidden = !form.elements.address.required;
+  try {
+    validateDonation(donation);
+    $('#form-total').textContent = Number.isInteger(wreaths) && wreaths >= 0 && Number.isInteger(candles) && candles >= 0
+      ? money(total({ wreaths, candles, donation })) : 'Enter quantities';
+  } catch (error) {
+    $('#form-total').textContent = error.message;
+  }
 }
 
 function openOrder(order = null) {
@@ -192,6 +205,7 @@ function openOrder(order = null) {
   $('#form-error').hidden = true;
   if (order) {
     for (const key of ['name', 'address', 'phone', 'wreaths', 'candles', 'payment', 'location', 'notes']) form.elements[key].value = order[key];
+    form.elements.donation.value = order.donation ?? 0;
   }
   updateTotal();
   updateVenmoLink();
@@ -205,11 +219,13 @@ $('#close-dialog').addEventListener('click', () => { if (!saving) dialog.close()
 $('#cancel-dialog').addEventListener('click', () => { if (!saving) dialog.close(); });
 form.elements.wreaths.addEventListener('change', updateTotal);
 form.elements.candles.addEventListener('change', updateTotal);
+form.elements.donation.addEventListener('input', updateTotal);
 form.elements.payment.addEventListener('change', updateVenmoLink);
 $('#order-venmo').addEventListener('click', () => openVenmo({
   name: form.elements.name.value.trim(),
   wreaths: Number(form.elements.wreaths.value),
   candles: Number(form.elements.candles.value),
+  donation: Number(form.elements.donation.value),
 }));
 $('#manage-venmo').addEventListener('click', () => openVenmo());
 $('#close-venmo').addEventListener('click', () => venmoDialog.close());
@@ -258,6 +274,7 @@ form.addEventListener('submit', async event => {
       phone: form.elements.phone.value.trim(),
       wreaths: Number(form.elements.wreaths.value),
       candles: Number(form.elements.candles.value),
+      donation: Number(form.elements.donation.value),
       payment: form.elements.payment.value,
       paid: true,
       delivered: previous?.delivered ?? false,

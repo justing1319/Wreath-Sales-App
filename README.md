@@ -18,6 +18,9 @@ An HTTP LAN address is only useful for viewing the interface: mobile browsers re
 
 ## Orders and backups
 
+- **Donation amount ($)** accepts an optional dollar amount with cents, either alongside goods or on its own with both quantities at zero. Donation-only entries need a name but no address and never appear in delivery lists. Adding items requires an address.
+- Order totals, the collected total, and Venmo order amounts include donations. The dashboard also shows donations separately. Donation amounts are preserved in backups and included in a separate CSV column; older orders and backups without a donation field count as $0.
+
 - Record customer name, address, optional phone, quantities, payment method (cash/check/Venmo), delivery location, delivery status, and notes.
 - Tap a quantity to use the browser's native selection interface (the system picker on iPhone), with values from 0 to 999. Totals update when the selection changes.
 - Wreaths cost **$20** and candles **$13**, following the photographed sheet's header. Its sample $15 wreath total is inconsistent and is not used.
@@ -34,6 +37,8 @@ An HTTP LAN address is only useful for viewing the interface: mobile browsers re
 ## Delivery round
 
 Switch to **Delivery mode** when the goods are ready, even if that is a month after selling. It initially shows **To deliver**, with name, address, phone, wreath/candle quantities, delivery location, and notes. Search customers or switch between **All orders**, **To deliver**, and **Delivered**.
+
+Delivery lists follow this route: Richard Road odd numbers low to high, Richard Road even numbers high to low, Temi Road even numbers high to low, Temi Road odd numbers low to high, Day Road low to high, then Woods Crossing low to high. Matching ignores capitalization and accepts Road/Rd/Rd. and Crossing/Xing. Enter the house number first. Other or unrecognized addresses appear at the end in newest-first order, never omitted. Search and all delivery filters retain route order; Sales mode stays newest-first. Stored order data and CSV/backup ordering are unchanged by route sorting.
 
 Tap **Deliver** after leaving the items. Choose **Take photo** to open the phone's camera (rear camera where supported) or **Choose photo** for an existing picture. Review the preview, then **Save photo & mark delivered**. A photo is optional: **Mark delivered without photo** also records the delivery date. Selecting an image alone never marks the order delivered. Canceling a draft photo asks before discarding it.
 
