@@ -103,12 +103,10 @@ function updateVenmoLink() {
 function render() {
   const sums = summary(orders);
   $('#sales').textContent = money(sums.sales);
-  $('#order-count').textContent = `${orders.length} order${orders.length === 1 ? '' : 's'} this season`;
+  $('#order-count').textContent = orders.length;
   $('#wreath-count').textContent = sums.wreaths;
   $('#candle-count').textContent = sums.candles;
-  $('#pending-count').textContent = sums.pending;
-  $('#collected').textContent = `${money(sums.collected)} collected`;
-  $('#donation-summary').textContent = `${money(sums.donations)} in donations`;
+  $('#donation-total').textContent = money(sums.donations);
   $('#list-count').textContent = orders.length;
   $('#add-order').disabled = $('#first-order').disabled = !storageAvailable || saving;
   $('#export').disabled = $('#backup').disabled = !storageAvailable || saving || !orders.length;

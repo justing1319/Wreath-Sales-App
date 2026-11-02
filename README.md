@@ -19,7 +19,7 @@ An HTTP LAN address is only useful for viewing the interface: mobile browsers re
 ## Orders and backups
 
 - **Donation amount ($)** accepts an optional dollar amount with cents, either alongside goods or on its own with both quantities at zero. Donation-only entries need a name but no address and never appear in delivery lists. Adding items requires an address.
-- Order totals, the collected total, and Venmo order amounts include donations. The dashboard also shows donations separately. Donation amounts are preserved in backups and included in a separate CSV column; older orders and backups without a donation field count as $0.
+- Order totals, the collected total, and Venmo order amounts include donations. The dashboard has two equal top-row tiles for total sales (including donations) and order count, followed by three equal tiles for wreaths sold, candles sold, and donation dollars. Each tile shows only its label and value. Donation amounts are preserved in backups and included in a separate CSV column; older orders and backups without a donation field count as $0.
 
 - Record customer name, address, optional phone, quantities, payment method (cash/check/Venmo), delivery location, delivery status, and notes.
 - Tap a quantity to use the browser's native selection interface (the system picker on iPhone), with values from 0 to 999. Totals update when the selection changes.
