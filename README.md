@@ -51,6 +51,10 @@ Orders and delivery photos use **IndexedDB**, which supports larger device-local
 
 Orders and photos do not sync between devices. Back up regularly, especially before clearing browser data, changing browsers, moving devices, or reinstalling, and before/after the delivery round. Browser storage can be evicted and is not encrypted by this app; use a device lock and protect exported backup files, which now contain photos. The shared Venmo screenshot remains a separate localStorage setting and is not part of order backups.
 
+## Payment reports
+
+Open **Reports** for Cash, Check, and Venmo collected totals, a **Cash + Venmo** subtotal excluding checks, and **Total collected** across all three methods. Totals include donations and donation-only entries, use all saved orders on this device regardless of search or delivery filters, and work offline. Changing an order's amount/payment method, deleting an order, or restoring a backup updates the report. These are recorded payments, not a live verification of Venmo or bank transactions.
+
 ## App updates
 
 When changing cached app files, increment the cache version in `sw.js`. An update installs in the background and activates after all old app tabs/windows close. Only this app's prefixed caches are cleaned up; saved orders are unaffected. The server must serve `sw.js` as JavaScript and `manifest.webmanifest` as JSON/manifest content.

@@ -21,15 +21,25 @@
   <main>
     <div class="intro"><div><p class="eyebrow">Holliston Cub Scouts · Pack 47</p><h1>A little holiday cheer.<br>A lot of good.</h1><p class="subheading">Your neighborhood sales, all in one place.</p></div><div class="season"><span aria-hidden="true">✳</span> Wreath & candle fundraiser</div></div>
     <div id="notice" class="notice" role="alert" hidden></div>
-    <nav class="mode-switch" aria-label="App mode"><button id="sales-mode" class="button green" aria-pressed="true">Sales mode</button><button id="delivery-mode" class="button quiet" aria-pressed="false">Delivery mode</button></nav>
-    <section class="stats" aria-label="Sales summary">
+    <nav class="mode-switch" aria-label="App mode"><button id="sales-mode" class="button green" aria-pressed="true">Sales mode</button><button id="delivery-mode" class="button quiet" aria-pressed="false">Delivery mode</button><button id="reports-mode" class="button quiet" aria-pressed="false">Reports</button></nav>
+    <section id="reports" class="orders-section reports-section" aria-labelledby="reports-title" hidden>
+      <div class="section-heading"><div><h2 id="reports-title">Payment report</h2><p id="report-description">Loading saved orders...</p></div></div>
+      <dl class="report-grid">
+        <div class="report-card"><dt>Cash collected</dt><dd id="report-cash">$0</dd></div>
+        <div class="report-card"><dt>Venmo collected</dt><dd id="report-venmo">$0</dd></div>
+        <div class="report-card"><dt>Check collected</dt><dd id="report-check">$0</dd></div>
+        <div class="report-card"><dt>Cash + Venmo</dt><dd id="report-cashAndVenmo">$0</dd></div>
+        <div class="report-card report-total"><dt>Total collected</dt><dd id="report-total">$0</dd></div>
+      </dl>
+    </section>
+    <section id="sales-summary" class="stats" aria-label="Sales summary">
       <div class="stat primary"><span>Total sales</span><strong id="sales">$0</strong></div>
       <div class="stat"><span>Orders</span><strong id="order-count">0</strong></div>
       <div class="stat"><span>Wreaths sold</span><strong id="wreath-count">0</strong></div>
       <div class="stat"><span>Candles sold</span><strong id="candle-count">0</strong></div>
       <div class="stat"><span>Donations</span><strong id="donation-total">$0</strong></div>
     </section>
-    <section class="orders-section">
+    <section id="order-section" class="orders-section">
       <div class="section-heading"><div><h2><span id="section-title">Your orders</span> <span id="list-count" class="count">0</span></h2><p id="section-description">From the first doorstep to the last delivery.</p></div><button id="add-order" class="button green"><span aria-hidden="true">+</span> New order</button></div>
       <div class="toolbar"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search name, address, or phone" aria-label="Search orders"></label><div class="filters" role="group" aria-label="Filter orders"><button class="filter active" data-filter="all" aria-pressed="true">All orders</button><button class="filter" data-filter="pending" aria-pressed="false">To deliver</button><button class="filter" data-filter="delivered" aria-pressed="false" hidden>Delivered</button></div><button id="export" class="button quiet export">Export CSV <span aria-hidden="true">↓</span></button></div>
       <p id="delivery-route" class="route-guide" hidden>Route: Richard odd ↑, even ↓ · Temi even ↓, odd ↑ through 33 · Scott ↑ · remaining Temi odd ↑ · Day ↑ · Woods Crossing ↑. Other addresses follow at the end.</p>

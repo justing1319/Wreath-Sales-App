@@ -105,6 +105,17 @@ export function summary(orders) {
   }), { sales: 0, collected: 0, donations: 0, wreaths: 0, candles: 0, pending: 0 });
 }
 
+export function paymentSummary(orders) {
+  const result = { cash: 0, check: 0, venmo: 0, cashAndVenmo: 0, total: 0 };
+  for (const order of orders) {
+    if (!order.paid) continue;
+    result[order.payment] = addMoney(result[order.payment], total(order));
+  }
+  result.cashAndVenmo = addMoney(result.cash, result.venmo);
+  result.total = addMoney(result.cashAndVenmo, result.check);
+  return result;
+}
+
 export function toCSV(orders) {
   const escape = value => {
     let text = String(value);
