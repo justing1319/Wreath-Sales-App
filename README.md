@@ -26,6 +26,7 @@ An HTTP LAN address is only useful for viewing the interface: mobile browsers re
 - Tap a quantity to use the browser's native selection interface (the system picker on iPhone), with values from 0 to 999. Totals update when the selection changes.
 - Wreaths cost **$20** and candles **$13**, following the photographed sheet's header. Its sample $15 wreath total is inconsistent and is not used.
 - Every entered order is considered paid; no separate payment-received checkbox is needed. Existing unpaid orders are marked paid when this version loads, and restored backups are also marked paid. The backup and CSV `Paid` fields remain for compatibility.
+- Selecting **Check** in the order form shows **Checks payable to Holliston Pack 47** below the payment selector, including when editing a saved check order. It is hidden for Cash and Venmo; there is no separate bottom-of-page reminder.
 - New orders start undelivered. Edit orders to change sales details, payment method, or delivery instructions. Delivery status and photos are managed separately in **Delivery mode**, not the order form.
 - To delete, edit the order and choose **Delete order**. A separate confirmation asks you to type the customer's full name exactly (including capitalization) before **Delete permanently** unlocks. **Keep order**, closing the dialog, or Escape cancels without deleting.
 - Search by name, address, or phone. Filter undelivered orders.
