@@ -96,8 +96,9 @@ function openVenmo(order = null) {
   venmoDialog.showModal();
 }
 
-function updateVenmoLink() {
+function updatePaymentHelp() {
   $('#order-venmo').hidden = form.elements.payment.value !== 'venmo';
+  $('#check-payment-help').hidden = form.elements.payment.value !== 'check';
 }
 
 function render() {
@@ -136,7 +137,7 @@ function render() {
     button.setAttribute('aria-pressed', String(button.dataset.filter === filter));
   });
   updateDeliveryControls();
-  updateVenmoLink();
+  updatePaymentHelp();
   const query = $('#search').value.trim().toLowerCase();
   const visible = orders.filter(order => [order.name, order.address, order.phone].some(value => value.toLowerCase().includes(query)))
     .filter(order => mode !== 'delivery' || needsDelivery(order))
@@ -215,7 +216,7 @@ function openOrder(order = null) {
     form.elements.donation.value = order.donation ?? 0;
   }
   updateTotal();
-  updateVenmoLink();
+  updatePaymentHelp();
   dialog.showModal();
   form.elements.name.focus();
 }
@@ -227,7 +228,7 @@ $('#cancel-dialog').addEventListener('click', () => { if (!saving) dialog.close(
 form.elements.wreaths.addEventListener('change', updateTotal);
 form.elements.candles.addEventListener('change', updateTotal);
 form.elements.donation.addEventListener('input', updateTotal);
-form.elements.payment.addEventListener('change', updateVenmoLink);
+form.elements.payment.addEventListener('change', updatePaymentHelp);
 $('#order-venmo').addEventListener('click', () => openVenmo({
   name: form.elements.name.value.trim(),
   wreaths: Number(form.elements.wreaths.value),
