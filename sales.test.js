@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_QUANTITY, MAX_QR_LENGTH, MAX_DELIVERY_PHOTO_LENGTH, money, total, summary, compareDeliveryOrders, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { MAX_QUANTITY, MAX_QR_LENGTH, MAX_DELIVERY_PHOTO_LENGTH, money, total, summary, paymentSummary, compareDeliveryOrders, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 
 const order = overrides => ({
   id: 'test-order', name: 'Test Customer', address: '12 Example St', phone: '555-0100',
@@ -137,4 +137,16 @@ test('Scott Road runs low to high between the early and remaining odd Temi stops
   assert.deepEqual(addresses.toReversed().map(address => order({ address })).sort(compareDeliveryOrders).map(item => item.address), addresses);
   const missingAnchors = ['31 Temi Road', '2 Scott Rd', '10 Scott Road', '47 Temi Road'];
   assert.deepEqual(missingAnchors.toReversed().map(address => order({ address })).sort(compareDeliveryOrders).map(item => item.address), missingAnchors);
+});
+test('payment report includes donations and separates checks from cash plus Venmo', () => {
+  const orders = [
+    order({ paid: true, payment: 'cash', donation: 0.1 }),
+    order({ paid: true, payment: 'cash', donation: 0.2, delivered: true }),
+    order({ paid: true, payment: 'venmo', donation: 5.25 }),
+    order({ paid: true, payment: 'check' }),
+    order({ paid: true, payment: 'venmo', wreaths: 0, candles: 0, donation: 10 }),
+    order({ paid: false, payment: 'check', donation: 100 }),
+  ];
+  assert.deepEqual(paymentSummary(orders), { cash: 92.3, venmo: 61.25, check: 46, cashAndVenmo: 153.55, total: 199.55 });
+  assert.deepEqual(paymentSummary([]), { cash: 0, venmo: 0, check: 0, cashAndVenmo: 0, total: 0 });
 });

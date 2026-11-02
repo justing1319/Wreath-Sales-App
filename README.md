@@ -19,6 +19,7 @@ An HTTP LAN address is only useful for viewing the interface: mobile browsers re
 ## Orders and backups
 
 - **Donation amount ($)** accepts an optional dollar amount with cents, either alongside goods or on its own with both quantities at zero. Donation-only entries need a name but no address and never appear in delivery lists. Adding items requires an address.
+- Every order tile shows **Donation: $amount** separately from the combined order total, including **Donation: $0** for orders without a donation. Delivery tiles show the same breakdown.
 - Order totals, the collected total, and Venmo order amounts include donations. The dashboard has two equal top-row tiles for total sales (including donations) and order count, followed by three equal tiles for wreaths sold, candles sold, and donation dollars. Each tile shows only its label and value. Donation amounts are preserved in backups and included in a separate CSV column; older orders and backups without a donation field count as $0.
 
 - Record customer name, address, optional phone, quantities, payment method (cash/check/Venmo), delivery location, delivery status, and notes.
@@ -49,6 +50,10 @@ Photos are resized to at most 1280 pixels and stored as JPEG without the source 
 Orders and delivery photos use **IndexedDB**, which supports larger device-local storage than the old small text-storage limit. Existing orders migrate automatically on first load; the older localStorage copy is left untouched for recovery but is no longer updated. The migration preserves delivered status and other data, and all orders remain paid as previously configured. Saving uses a revision check in an IndexedDB transaction so two tabs cannot overwrite each other's changes. A tab detecting another writer requires reloading.
 
 Orders and photos do not sync between devices. Back up regularly, especially before clearing browser data, changing browsers, moving devices, or reinstalling, and before/after the delivery round. Browser storage can be evicted and is not encrypted by this app; use a device lock and protect exported backup files, which now contain photos. The shared Venmo screenshot remains a separate localStorage setting and is not part of order backups.
+
+## Payment reports
+
+Open **Reports** for Cash, Check, and Venmo collected totals, a **Cash + Venmo** subtotal excluding checks, and **Total collected** across all three methods. Totals include donations and donation-only entries, use all saved orders on this device regardless of search or delivery filters, and work offline. Changing an order's amount/payment method, deleting an order, or restoring a backup updates the report. These are recorded payments, not a live verification of Venmo or bank transactions.
 
 ## App updates
 

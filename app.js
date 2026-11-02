@@ -1,4 +1,4 @@
-import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, paymentSummary, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 import { loadOrders, saveOrders } from './storage.js';
 import { readImage } from './images.js';
 
@@ -102,6 +102,15 @@ function updateVenmoLink() {
 
 function render() {
   const sums = summary(orders);
+  const payments = paymentSummary(orders);
+  for (const key of ['cash', 'check', 'venmo', 'cashAndVenmo', 'total']) {
+    $(`#report-${key}`).textContent = storageAvailable ? money(payments[key]) : 'Unavailable';
+  }
+  $('#report-description').textContent = loading ? 'Loading saved orders...'
+    : !storageAvailable ? 'Reload or restore your orders before using these totals.'
+    : `All ${orders.length} orders on this device. Includes donations, regardless of delivery status.`;
+  $('#reports').hidden = mode !== 'reports';
+  $('#sales-summary').hidden = $('#order-section').hidden = mode === 'reports';
   $('#sales').textContent = money(sums.sales);
   $('#order-count').textContent = orders.length;
   $('#wreath-count').textContent = sums.wreaths;
@@ -157,7 +166,7 @@ function render() {
     if (mode === 'delivery' && order.notes) customer.append(element('p', '', `Notes: ${order.notes}`));
     const items = element('div', 'items');
     if (needsDelivery(order)) items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`));
-    if (order.donation) items.append(element('div', '', `${money(order.donation)} donation`));
+    items.append(element('div', 'order-donation', `Donation: ${money(order.donation ?? 0)}`));
     items.append(element('strong', '', money(total(order))));
     const status = element('div', 'status');
     const paymentName = order.payment === 'venmo' ? 'Venmo' : order.payment === 'cash' ? 'Cash' : 'Check';
@@ -346,7 +355,7 @@ function switchMode(nextMode) {
   mode = nextMode;
   filter = mode === 'delivery' ? 'pending' : 'all';
   $('#search').value = '';
-  for (const value of ['sales', 'delivery']) {
+  for (const value of ['sales', 'delivery', 'reports']) {
     $(`#${value}-mode`).className = `button ${mode === value ? 'green' : 'quiet'}`;
     $(`#${value}-mode`).setAttribute('aria-pressed', String(mode === value));
   }
@@ -354,6 +363,7 @@ function switchMode(nextMode) {
 }
 $('#sales-mode').addEventListener('click', () => switchMode('sales'));
 $('#delivery-mode').addEventListener('click', () => switchMode('delivery'));
+$('#reports-mode').addEventListener('click', () => switchMode('reports'));
 
 function updateDeliveryControls() {
   const order = orders.find(order => order.id === deliveryId);
