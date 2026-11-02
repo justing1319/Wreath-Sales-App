@@ -58,6 +58,10 @@ Open **Reports** for Cash, Check, and Venmo collected totals, a **Cash + Venmo**
 
 Above the payment report, **Sales breakdown** shows wreaths sold × $20 = wreath revenue, candles sold × $13 = candle revenue, donations, and a **Grand total** combining all three. It uses the same saved orders and prices as order totals, including donation-only entries.
 
+## Selling rewards
+
+On **Reports**, **Selling rewards** calculates the Fiske's gift certificate earned for one scout from all saved wreath quantities: the first 25 earn $0.25 each, the next 25 (26–50) earn $0.50 each, and wreaths 51 onward earn $0.75 each. Rates are marginal, not retroactive: 30 wreaths earn `25 × $0.25 + 5 × $0.50 = $8.75`; 51 earn `$19.50`. The report shows each tier's count, rate, subtotal, and the total certificate value. Candles and donations are excluded; delivery status and search filters do not affect rewards. Edits, deletions, and restored backups automatically update the calculation, including offline.
+
 ## App updates
 
 When changing cached app files, increment the cache version in `sw.js`. An update installs in the background and activates after all old app tabs/windows close. Only this app's prefixed caches are cleaned up; saved orders are unaffected. The server must serve `sw.js` as JavaScript and `manifest.webmanifest` as JSON/manifest content.

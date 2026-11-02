@@ -1,4 +1,4 @@
-import { PRICES, STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, paymentSummary, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { PRICES, STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, paymentSummary, sellingRewards, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 import { loadOrders, saveOrders } from './storage.js';
 import { readImage } from './images.js';
 
@@ -104,6 +104,15 @@ function updatePaymentHelp() {
 function render() {
   const sums = summary(orders);
   const payments = paymentSummary(orders);
+  const rewards = sellingRewards(sums.wreaths);
+  rewards.tiers.forEach((tier, index) => {
+    $(`#reward-tier-${index}`).textContent = storageAvailable
+      ? `${tier.count} × ${money(tier.rate)} = ${money(tier.amount)}` : 'Unavailable';
+  });
+  $('#reward-total').textContent = storageAvailable ? money(rewards.total) : 'Unavailable';
+  $('#reward-description').textContent = loading ? 'Loading saved orders...'
+    : !storageAvailable ? 'Reload or restore your orders before using this calculation.'
+    : `Based on ${sums.wreaths} wreaths sold across all saved orders for one scout. Candles and donations do not count. Higher rates apply only to wreaths in that tier.`;
   for (const product of ['wreaths', 'candles']) {
     $(`#breakdown-${product}`).textContent = storageAvailable
       ? `${sums[product]} × ${money(PRICES[product])} = ${money(sums[product] * PRICES[product])}`
