@@ -1,4 +1,4 @@
-const CACHE = 'pack47-evergreen-v5';
+const CACHE = 'pack47-evergreen-v6';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './sales.js', './storage.js', './images.js', './manifest.webmanifest', './icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', event => {

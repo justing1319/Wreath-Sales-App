@@ -157,7 +157,7 @@ function render() {
     if (mode === 'delivery' && order.notes) customer.append(element('p', '', `Notes: ${order.notes}`));
     const items = element('div', 'items');
     if (needsDelivery(order)) items.append(element('span', '', `${order.wreaths} wreath${order.wreaths === 1 ? '' : 's'} · ${order.candles} candle${order.candles === 1 ? '' : 's'}`));
-    if (order.donation) items.append(element('div', '', `${money(order.donation)} donation`));
+    items.append(element('div', 'order-donation', `Donation: ${money(order.donation ?? 0)}`));
     items.append(element('strong', '', money(total(order))));
     const status = element('div', 'status');
     const paymentName = order.payment === 'venmo' ? 'Venmo' : order.payment === 'cash' ? 'Cash' : 'Check';
