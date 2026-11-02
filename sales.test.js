@@ -1,11 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_QUANTITY, MAX_QR_LENGTH, MAX_DELIVERY_PHOTO_LENGTH, money, total, summary, paymentSummary, compareDeliveryOrders, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { MAX_QUANTITY, MAX_QR_LENGTH, MAX_DELIVERY_PHOTO_LENGTH, money, total, summary, paymentSummary, sellingRewards, compareDeliveryOrders, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 
 const order = overrides => ({
   id: 'test-order', name: 'Test Customer', address: '12 Example St', phone: '555-0100',
   wreaths: 1, candles: 2, payment: 'cash', paid: false, delivered: false,
   location: 'Front steps', notes: '', createdAt: '2026-10-31T12:00:00.000Z', ...overrides,
+});
+
+test('selling rewards use marginal rates at every boundary and the sheet example', () => {
+  for (const [count, expected] of [[0, 0], [1, 0.25], [24, 6], [25, 6.25], [26, 6.75], [30, 8.75],
+    [49, 18.25], [50, 18.75], [51, 19.5], [52, 20.25], [100, 56.25], [999, 730.5]]) {
+    assert.equal(sellingRewards(count).total, expected, `${count} wreaths`);
+  }
+  assert.deepEqual(sellingRewards(51).tiers, [
+    { count: 25, rate: 0.25, amount: 6.25 },
+    { count: 25, rate: 0.5, amount: 12.5 },
+    { count: 1, rate: 0.75, amount: 0.75 },
+  ]);
+  for (const invalid of [-1, 1.5, NaN, Infinity, '30', null]) assert.throws(() => sellingRewards(invalid));
+  const totals = summary([order({ wreaths: 20, candles: 999, donation: 100 }),
+    order({ wreaths: 10, delivered: true }), order({ wreaths: 0, candles: 0, donation: 500 })]);
+  assert.equal(sellingRewards(totals.wreaths).total, 8.75);
 });
 
 test('uses sheet header prices, not the inconsistent example total', () => {

@@ -116,6 +116,16 @@ export function paymentSummary(orders) {
   return result;
 }
 
+export function sellingRewards(wreaths) {
+  if (!Number.isSafeInteger(wreaths) || wreaths < 0) throw new Error('Wreath count must be a nonnegative whole number.');
+  const tiers = [
+    { count: Math.min(wreaths, 25), rate: 0.25 },
+    { count: Math.min(Math.max(wreaths - 25, 0), 25), rate: 0.50 },
+    { count: Math.max(wreaths - 50, 0), rate: 0.75 },
+  ].map(tier => ({ ...tier, amount: tier.count * tier.rate }));
+  return { tiers, total: tiers.reduce((sum, tier) => addMoney(sum, tier.amount), 0) };
+}
+
 export function toCSV(orders) {
   const escape = value => {
     let text = String(value);
