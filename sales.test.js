@@ -127,3 +127,14 @@ test('route sorting supports suffixes, apartments, unknown-address fallback, and
   assert.deepEqual([old, recent].sort(compareDeliveryOrders), [recent, old]);
   assert.equal(compareDeliveryOrders(order(), order()), 0);
 });
+test('Scott Road runs low to high between the early and remaining odd Temi stops', () => {
+  const addresses = [
+    '2 Richard Road', '50 Temi Road', '2 Temi Road',
+    '1 Temi Rd', '31 Temi Road', '33 Temi Road',
+    '1 Scott Road', '2 SCOTT RD.', '10 Scott Rd, Holliston',
+    '45 Temi Rd', '47 Temi Road', '2 Day Road', '1 Woods Crossing', '1 Other Road',
+  ];
+  assert.deepEqual(addresses.toReversed().map(address => order({ address })).sort(compareDeliveryOrders).map(item => item.address), addresses);
+  const missingAnchors = ['31 Temi Road', '2 Scott Rd', '10 Scott Road', '47 Temi Road'];
+  assert.deepEqual(missingAnchors.toReversed().map(address => order({ address })).sort(compareDeliveryOrders).map(item => item.address), missingAnchors);
+});

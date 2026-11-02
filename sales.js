@@ -10,21 +10,22 @@ const addMoney = (a, b) => (Math.round(a * 100) + Math.round(b * 100)) / 100;
 export const total = order => addMoney(order.wreaths * PRICES.wreaths + order.candles * PRICES.candles, order.donation ?? 0);
 
 function deliveryRoutePosition(address) {
-  const match = address.trim().match(/^(\d+)([a-z]?)\s+(richard\s+(?:road|rd)|temi\s+(?:road|rd)|day\s+(?:road|rd)|woods\s+(?:crossing|xing))\.?(?=$|[\s,])/i);
-  if (!match) return { group: 6, number: 0 };
+  const match = address.trim().match(/^(\d+)([a-z]?)\s+(richard\s+(?:road|rd)|temi\s+(?:road|rd)|scott\s+(?:road|rd)|day\s+(?:road|rd)|woods\s+(?:crossing|xing))\.?(?=$|[\s,])/i);
+  if (!match) return { group: 8, number: 0 };
   const number = Number(match[1]);
-  if (!Number.isSafeInteger(number)) return { group: 6, number: 0 };
+  if (!Number.isSafeInteger(number)) return { group: 8, number: 0 };
   const street = match[3].toLowerCase();
   if (street.startsWith('richard')) return { group: number % 2 ? 0 : 1, number: number % 2 ? number : -number };
-  if (street.startsWith('temi')) return { group: number % 2 ? 3 : 2, number: number % 2 ? number : -number };
-  return { group: street.startsWith('day') ? 4 : 5, number };
+  if (street.startsWith('temi')) return { group: number % 2 ? (number <= 33 ? 3 : 5) : 2, number: number % 2 ? number : -number };
+  if (street.startsWith('scott')) return { group: 4, number };
+  return { group: street.startsWith('day') ? 6 : 7, number };
 }
 
 export function compareDeliveryOrders(a, b) {
   const first = deliveryRoutePosition(a.address);
   const second = deliveryRoutePosition(b.address);
   return first.group - second.group || first.number - second.number ||
-    (first.group === 6 ? b.createdAt.localeCompare(a.createdAt)
+    (first.group === 8 ? b.createdAt.localeCompare(a.createdAt)
       : a.address.localeCompare(b.address, 'en', { numeric: true, sensitivity: 'base' }));
 }
 
