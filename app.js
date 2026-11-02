@@ -1,4 +1,4 @@
-import { STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, paymentSummary, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
+import { PRICES, STORAGE_KEY, MAX_QUANTITY, VENMO_QR_KEY, money, total, summary, paymentSummary, needsDelivery, compareDeliveryOrders, validateDonation, validateOrder, validateOrders, markOrdersPaid, validateVenmoQR, validateDeliveryPhoto, toCSV } from './sales.js';
 import { loadOrders, saveOrders } from './storage.js';
 import { readImage } from './images.js';
 
@@ -104,6 +104,13 @@ function updatePaymentHelp() {
 function render() {
   const sums = summary(orders);
   const payments = paymentSummary(orders);
+  for (const product of ['wreaths', 'candles']) {
+    $(`#breakdown-${product}`).textContent = storageAvailable
+      ? `${sums[product]} × ${money(PRICES[product])} = ${money(sums[product] * PRICES[product])}`
+      : 'Unavailable';
+  }
+  $('#breakdown-donations').textContent = storageAvailable ? money(sums.donations) : 'Unavailable';
+  $('#breakdown-total').textContent = storageAvailable ? money(sums.sales) : 'Unavailable';
   for (const key of ['cash', 'check', 'venmo', 'cashAndVenmo', 'total']) {
     $(`#report-${key}`).textContent = storageAvailable ? money(payments[key]) : 'Unavailable';
   }

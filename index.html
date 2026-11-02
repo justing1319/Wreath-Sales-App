@@ -23,6 +23,15 @@
     <div id="notice" class="notice" role="alert" hidden></div>
     <nav class="mode-switch" aria-label="App mode"><button id="sales-mode" class="button green" aria-pressed="true">Sales mode</button><button id="delivery-mode" class="button quiet" aria-pressed="false">Delivery mode</button><button id="reports-mode" class="button quiet" aria-pressed="false">Reports</button></nav>
     <section id="reports" class="orders-section reports-section" aria-labelledby="reports-title" hidden>
+      <section aria-labelledby="breakdown-title">
+        <div class="section-heading"><div><h2 id="breakdown-title">Sales breakdown</h2></div></div>
+        <dl class="sales-breakdown">
+          <div><dt>Wreaths sold</dt><dd id="breakdown-wreaths">0 × $20 = $0</dd></div>
+          <div><dt>Candles sold</dt><dd id="breakdown-candles">0 × $13 = $0</dd></div>
+          <div><dt>Donations</dt><dd id="breakdown-donations">$0</dd></div>
+          <div class="breakdown-grand-total"><dt>Grand total</dt><dd id="breakdown-total">$0</dd></div>
+        </dl>
+      </section>
       <div class="section-heading"><div><h2 id="reports-title">Payment report</h2><p id="report-description">Loading saved orders...</p></div></div>
       <dl class="report-grid">
         <div class="report-card"><dt>Cash collected</dt><dd id="report-cash">$0</dd></div>
